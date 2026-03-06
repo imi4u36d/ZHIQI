@@ -11,19 +11,19 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.remember
 
 @Composable
 fun GlassBackground(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color(0xFFFFF8FB))
             .statusBarsPadding()
             .padding(16.dp)
     ) {
@@ -33,12 +33,11 @@ fun GlassBackground(content: @Composable () -> Unit) {
 
 fun Modifier.glassCard(): Modifier {
     val shape = RoundedCornerShape(16.dp)
-    val base = this
-        .shadow(8.dp, shape, ambientColor = Color(0x1A000000), spotColor = Color(0x1A000000))
+    return this
+        .shadow(8.dp, shape, ambientColor = Color(0x15D66A9A), spotColor = Color(0x15D66A9A))
         .clip(shape)
         .background(Color.White)
-        .border(1.dp, Color(0xFFE6E8EC), shape)
-    return base
+        .border(1.dp, Color(0xFFF3DCE7), shape)
 }
 
 @Composable

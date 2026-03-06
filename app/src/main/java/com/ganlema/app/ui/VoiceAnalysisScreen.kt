@@ -321,7 +321,7 @@ private fun VoiceHero(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.GraphicEq, contentDescription = "录音分析", tint = Color(0xFF5E5CE6))
+                Icon(Icons.Filled.GraphicEq, contentDescription = "录音分析", tint = Color(0xFFD66A9A))
                 Text(
                     text = "录音分析",
                     modifier = Modifier.padding(start = 8.dp),
@@ -336,11 +336,11 @@ private fun VoiceHero(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(Color(0xFFE76472), shape = CircleShape)
+                                .background(Color(0xFFD96582), shape = CircleShape)
                         )
                         Text(
                             text = " 录音中",
-                            color = Color(0xFFE76472),
+                            color = Color(0xFFD96582),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -348,7 +348,7 @@ private fun VoiceHero(
                 }
                 ActionChip(
                     text = "记录",
-                    color = Color(0xFF5E5CE6),
+                    color = Color(0xFFD66A9A),
                     icon = Icons.Filled.History,
                     onClick = onOpenHistory
                 )
@@ -361,11 +361,11 @@ private fun VoiceHero(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (!hasAudioPermission) {
-                ActionChip(text = "授予麦克风权限", color = Color(0xFF5E5CE6), onClick = onRequestPermission)
+                ActionChip(text = "授予麦克风权限", color = Color(0xFFD66A9A), onClick = onRequestPermission)
             } else if (isRecording) {
-                ActionChip(text = "停止并生成报告", color = Color(0xFFE76472), icon = Icons.Filled.StopCircle, onClick = onStop)
+                ActionChip(text = "停止并生成报告", color = Color(0xFFD96582), icon = Icons.Filled.StopCircle, onClick = onStop)
             } else {
-                ActionChip(text = "开始录音", color = Color(0xFF5E5CE6), icon = Icons.Filled.Mic, onClick = onStart)
+                ActionChip(text = "开始录音", color = Color(0xFFD66A9A), icon = Icons.Filled.Mic, onClick = onStart)
             }
 
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -380,7 +380,7 @@ private fun VoiceHero(
                         )
                         ActionChip(
                             text = "删除记录",
-                            color = Color(0xFFE76472),
+                            color = Color(0xFFD96582),
                             onClick = onDelete
                         )
                     }
@@ -495,8 +495,8 @@ private fun VoiceLineChart(points: List<Float>, highlightSegments: List<Segment>
             }
         }
 
-        drawPath(path = fillPath, color = Color(0x225E5CE6))
-        drawPath(path = linePath, color = Color(0xFF5E5CE6))
+        drawPath(path = fillPath, color = Color(0x22D66A9A))
+        drawPath(path = linePath, color = Color(0xFFD66A9A))
     }
 }
 
@@ -574,7 +574,7 @@ private fun VoiceHistorySheet(
                                 color = Color(0xFF2F3440),
                                 fontWeight = FontWeight.SemiBold
                             )
-                            ActionChip(text = "删除", color = Color(0xFFE76472)) { onDeleteItem(item.id) }
+                            ActionChip(text = "删除", color = Color(0xFFD96582)) { onDeleteItem(item.id) }
                         }
                         Text("地点：${item.locationLabel}", color = Color(0xFF66707D), style = MaterialTheme.typography.bodySmall)
                         ReportLine("高潮段", "${item.climaxCount} 段")
@@ -928,7 +928,7 @@ private fun GenderInsightCard(title: String, insight: GenderInsight) {
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(title, color = Color(0xFF5E5CE6), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Text(title, color = Color(0xFFD66A9A), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         ReportLine("高潮段", "${insight.climaxCount} 段")
         ReportLine("高潮总时长", "${insight.climaxTotalSecond}s")
         ReportLine("最长高潮段", "${insight.longestClimaxSecond}s")

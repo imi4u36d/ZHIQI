@@ -112,7 +112,7 @@ fun RecordDetailSheet(
                     modifier = Modifier.weight(1f),
                     text = "编辑",
                     icon = Icons.Filled.Edit,
-                    color = Color(0xFF5E5CE6)
+                    color = Color(0xFFD66A9A)
                 ) {
                     showEdit = true
                 }
@@ -120,7 +120,7 @@ fun RecordDetailSheet(
                     modifier = Modifier.weight(1f),
                     text = "删除",
                     icon = Icons.Filled.DeleteOutline,
-                    color = Color(0xFFE76472)
+                    color = Color(0xFFD96582)
                 ) {
                     showDelete = true
                 }
@@ -182,11 +182,11 @@ private fun DetailItem(label: String, content: @Composable () -> Unit) {
 private fun BoxTag(tag: String) {
     Row(
         modifier = Modifier
-            .background(Color(0xFFEFEFFF), shape = RoundedCornerShape(12.dp))
+            .background(Color(0xFFFCE7F0), shape = RoundedCornerShape(12.dp))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(tag, style = MaterialTheme.typography.labelMedium, color = Color(0xFF5E5CE6))
+        Text(tag, style = MaterialTheme.typography.labelMedium, color = Color(0xFFD66A9A))
     }
 }
 

@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AssistChip
@@ -52,11 +49,9 @@ fun RecordDetailScreen(
     var record by remember { mutableStateOf<RecordEntity?>(null) }
     var showEdit by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
-    var show by remember { mutableStateOf(false) }
 
     LaunchedEffect(recordId) {
         record = repository.getById(recordId)
-        show = true
     }
 
     GlassBackground {
@@ -70,36 +65,34 @@ fun RecordDetailScreen(
                     modifier = Modifier.noRippleClickable { onOpenDrawer() }
                 )
             }
-            AnimatedVisibility(visible = show, enter = fadeIn() + slideInVertically(initialOffsetY = { it / 5 })) {
-                if (record == null) {
-                    Text("未找到记录")
-                } else {
-                    Column(modifier = Modifier.glassCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = record!!.type,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(record!!.protections.split("|").filter { it.isNotBlank() }) { tag ->
-                                AssistChip(
-                                    onClick = { },
-                                    label = { Text(tag) },
-                                    colors = AssistChipDefaults.assistChipColors(
-                                        containerColor = MaterialTheme.colorScheme.background
-                                    )
+            if (record == null) {
+                Text("未找到记录")
+            } else {
+                Column(modifier = Modifier.glassCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = record!!.type,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(record!!.protections.split("|").filter { it.isNotBlank() }) { tag ->
+                            AssistChip(
+                                onClick = { },
+                                label = { Text(tag) },
+                                colors = AssistChipDefaults.assistChipColors(
+                                    containerColor = MaterialTheme.colorScheme.background
                                 )
-                            }
-                        } 
-                        if (!record!!.otherProtection.isNullOrBlank()) {
-                            DetailLine("其他防护", record!!.otherProtection!!)
+                            )
                         }
-                        DetailLine(
-                            "记录时间",
-                            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(record!!.timeMillis))
-                        )
-                        if (!record!!.note.isNullOrBlank()) {
-                            DetailLine("备注", record!!.note!!)
-                        }
+                    }
+                    if (!record!!.otherProtection.isNullOrBlank()) {
+                        DetailLine("其他防护", record!!.otherProtection!!)
+                    }
+                    DetailLine(
+                        "记录时间",
+                        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(record!!.timeMillis))
+                    )
+                    if (!record!!.note.isNullOrBlank()) {
+                        DetailLine("备注", record!!.note!!)
                     }
                 }
             }

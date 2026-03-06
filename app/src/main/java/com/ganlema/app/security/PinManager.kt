@@ -65,6 +65,30 @@ class PinManager(context: Context) {
         prefs.edit().putBoolean(KEY_BIOMETRIC, enabled).apply()
     }
 
+    fun exportSnapshot(): PinSnapshot {
+        return PinSnapshot(
+            hashBase64 = prefs.getString(KEY_PIN_HASH, null),
+            saltBase64 = prefs.getString(KEY_PIN_SALT, null),
+            failCount = prefs.getInt(KEY_FAIL_COUNT, 0),
+            hidden = prefs.getBoolean(KEY_HIDDEN, false),
+            biometricEnabled = prefs.getBoolean(KEY_BIOMETRIC, false)
+        )
+    }
+
+    fun restoreSnapshot(snapshot: PinSnapshot?) {
+        if (snapshot == null || snapshot.hashBase64.isNullOrBlank() || snapshot.saltBase64.isNullOrBlank()) {
+            clearAll()
+            return
+        }
+        prefs.edit()
+            .putString(KEY_PIN_HASH, snapshot.hashBase64)
+            .putString(KEY_PIN_SALT, snapshot.saltBase64)
+            .putInt(KEY_FAIL_COUNT, snapshot.failCount.coerceAtLeast(0))
+            .putBoolean(KEY_HIDDEN, snapshot.hidden)
+            .putBoolean(KEY_BIOMETRIC, snapshot.biometricEnabled)
+            .apply()
+    }
+
     fun clearAll() {
         prefs.edit().clear().apply()
     }
@@ -84,3 +108,11 @@ class PinManager(context: Context) {
         private const val KEY_BIOMETRIC = "biometric_enabled"
     }
 }
+
+data class PinSnapshot(
+    val hashBase64: String?,
+    val saltBase64: String?,
+    val failCount: Int,
+    val hidden: Boolean,
+    val biometricEnabled: Boolean
+)

@@ -141,12 +141,12 @@ fun UnlockScreen(
                         modifier = Modifier
                             .size(width = 54.dp, height = 62.dp)
                             .background(
-                                color = if (filled) Color(0xFFEDEBFF) else Color(0xFFF7F8FB),
+                                color = if (filled) Color(0xFFFDEAF2) else Color(0xFFF7F8FB),
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .border(
                                 width = if (active) 1.5.dp else 1.dp,
-                                color = if (active) Color(0xFF7C76FF) else Color(0xFFE3E6ED),
+                                color = if (active) Color(0xFFD981AB) else Color(0xFFE3E6ED),
                                 shape = RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
@@ -154,7 +154,7 @@ fun UnlockScreen(
                         Text(
                             text = if (filled) "•" else "",
                             style = MaterialTheme.typography.headlineSmall,
-                            color = Color(0xFF5E5CE6),
+                            color = Color(0xFFD66A9A),
                             fontWeight = FontWeight.Bold
                         )
                     }

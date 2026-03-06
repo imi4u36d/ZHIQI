@@ -1,9 +1,6 @@
 package com.ganlema.app.ui
 
 import android.app.TimePickerDialog
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,63 +33,54 @@ import java.util.Locale
 fun SettingsScreen(
     repository: RecordRepository,
     pinManager: PinManager,
-    onOpenDisguise: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var remind by remember { mutableStateOf(false) }
     var clearStep by remember { mutableStateOf(0) }
     var message by remember { mutableStateOf("") }
-    var show by remember { mutableStateOf(false) }
     val reminderTime = remember { mutableStateOf("21:00") }
-    LaunchedEffect(Unit) { show = true }
 
     GlassBackground {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("设置", style = MaterialTheme.typography.titleLarge)
 
-            AnimatedVisibility(visible = show, enter = fadeIn() + slideInVertically(initialOffsetY = { it / 6 })) {
-                Column(modifier = Modifier.glassCard().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingRow(title = "应用隐藏", onClick = onOpenDisguise)
-                    SettingRow(title = "解锁方式", subtitle = "请到我的页面设置")
-                }
+            Column(modifier = Modifier.glassCard().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingRow(title = "解锁方式", subtitle = "请到我的页面设置")
             }
 
-            AnimatedVisibility(visible = show, enter = fadeIn() + slideInVertically(initialOffsetY = { it / 5 })) {
-                Column(modifier = Modifier.glassCard().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.glassCard().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("避孕提醒")
+                        if (remind) Text("每日 ${reminderTime.value}", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Switch(checked = remind, onCheckedChange = { remind = it })
+                }
+                if (remind) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            Text("避孕提醒")
-                            if (remind) Text("每日 ${reminderTime.value}", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Switch(checked = remind, onCheckedChange = { remind = it })
+                        Text("提醒时间")
+                        Text(
+                            reminderTime.value,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.clickable {
+                                val parts = reminderTime.value.split(":")
+                                val hour = parts.getOrNull(0)?.toIntOrNull() ?: 21
+                                val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+                                TimePickerDialog(context, { _, h, m ->
+                                    reminderTime.value = String.format(Locale.getDefault(), "%02d:%02d", h, m)
+                                }, hour, minute, true).show()
+                            }
+                        )
                     }
-                    if (remind) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("提醒时间")
-                            Text(
-                                reminderTime.value,
-                                color = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.clickable {
-                                    val parts = reminderTime.value.split(":")
-                                    val hour = parts.getOrNull(0)?.toIntOrNull() ?: 21
-                                    val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-                                    TimePickerDialog(context, { _, h, m ->
-                                        reminderTime.value = String.format(Locale.getDefault(), "%02d:%02d", h, m)
-                                    }, hour, minute, true).show()
-                                }
-                            )
-                        }
-                    }
-
                 }
             }
 

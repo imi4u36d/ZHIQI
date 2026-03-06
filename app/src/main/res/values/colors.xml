@@ -1,11 +1,11 @@
 <resources>
-    <color name="primary">#E5E9F2</color>
-    <color name="accent">#2F80ED</color>
-    <color name="danger">#EB5757</color>
-    <color name="text">#1B1E28</color>
-    <color name="textSecondary">#6B7280</color>
+    <color name="primary">#F8DCE8</color>
+    <color name="accent">#E98FB5</color>
+    <color name="danger">#D96582</color>
+    <color name="text">#322634</color>
+    <color name="textSecondary">#8C7A87</color>
 
-    <color name="icon_plain_bg">#E5E9F2</color>
-    <color name="icon_tool_bg">#D9F2E6</color>
-    <color name="icon_note_bg">#F6E8D9</color>
+    <color name="icon_plain_bg">#FCECF3</color>
+    <color name="icon_tool_bg">#F7E3EE</color>
+    <color name="icon_note_bg">#FBEAF2</color>
 </resources>

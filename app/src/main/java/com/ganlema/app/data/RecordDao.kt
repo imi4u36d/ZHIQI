@@ -22,6 +22,9 @@ interface RecordDao {
     @Query("SELECT * FROM records ORDER BY timeMillis DESC")
     fun getAllFlow(): Flow<List<RecordEntity>>
 
+    @Query("SELECT * FROM records ORDER BY timeMillis DESC")
+    suspend fun getAll(): List<RecordEntity>
+
     @Query("SELECT * FROM records WHERE id = :id")
     suspend fun getById(id: Long): RecordEntity?
 

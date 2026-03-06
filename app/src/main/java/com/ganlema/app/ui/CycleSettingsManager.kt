@@ -31,6 +31,27 @@ class CycleSettingsManager(context: Context) {
             .apply()
     }
 
+    fun exportSnapshot(): CycleSettingsSnapshot {
+        return CycleSettingsSnapshot(
+            configured = isConfigured(),
+            cycleLengthDays = cycleLengthDays(),
+            periodLengthDays = periodLengthDays(),
+            lastPeriodStartMillis = lastPeriodStartMillis()
+        )
+    }
+
+    fun restoreSnapshot(snapshot: CycleSettingsSnapshot?) {
+        if (snapshot == null || !snapshot.configured) {
+            prefs.edit().clear().apply()
+            return
+        }
+        saveAll(
+            cycleLengthDays = snapshot.cycleLengthDays,
+            periodLengthDays = snapshot.periodLengthDays,
+            lastPeriodStartMillis = snapshot.lastPeriodStartMillis
+        )
+    }
+
     companion object {
         private const val KEY_CONFIGURED = "configured"
         private const val KEY_CYCLE_LENGTH = "cycle_length"
@@ -38,3 +59,10 @@ class CycleSettingsManager(context: Context) {
         private const val KEY_LAST_PERIOD_START = "last_period_start"
     }
 }
+
+data class CycleSettingsSnapshot(
+    val configured: Boolean,
+    val cycleLengthDays: Int,
+    val periodLengthDays: Int,
+    val lastPeriodStartMillis: Long
+)

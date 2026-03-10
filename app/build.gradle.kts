@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ganlema.app"
+    namespace = "com.zhiqi.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.ganlema.app"
+        applicationId = "com.zhiqi.app"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -59,6 +59,7 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-process:2.8.3")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">干了么</string>
+    <string name="app_name">知期</string>
+    <string name="widget_cycle_name">生理周期提醒</string>
+    <string name="widget_cycle_title_default">今日周期提醒</string>
+    <string name="widget_cycle_phase_default">未设置生理周期</string>
+    <string name="widget_cycle_tip_default">点击进入应用完成周期设置</string>
 </resources>

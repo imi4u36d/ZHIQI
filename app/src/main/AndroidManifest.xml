@@ -1,8 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -10,7 +8,7 @@
         android:icon="@mipmap/ic_launcher_default"
         android:roundIcon="@mipmap/ic_launcher_default"
         android:supportsRtl="true"
-        android:theme="@style/Theme.GanLeMe">
+        android:theme="@style/Theme.ZhiQi">
 
         <activity
             android:name=".MainActivity"
@@ -21,6 +19,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".widget.CycleWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_cycle_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cycle_widget_info" />
+        </receiver>
 
     </application>
 

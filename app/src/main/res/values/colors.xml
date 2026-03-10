@@ -5,7 +5,7 @@
     <color name="text">#322634</color>
     <color name="textSecondary">#8C7A87</color>
 
-    <color name="icon_plain_bg">#FCECF3</color>
-    <color name="icon_tool_bg">#F7E3EE</color>
-    <color name="icon_note_bg">#FBEAF2</color>
+    <color name="icon_plain_bg">#FF4FA3</color>
+    <color name="icon_tool_bg">#FF7A1A</color>
+    <color name="icon_note_bg">#00B8D9</color>
 </resources>

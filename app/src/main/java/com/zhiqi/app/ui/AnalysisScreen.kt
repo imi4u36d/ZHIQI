@@ -351,7 +351,7 @@ private fun RecordCoverageCard(
     onOpenRecordPage: () -> Unit
 ) {
     val coreLabels = remember {
-        listOf("流量", "疼痛", "情绪", "睡眠", "白带", "性行为")
+        listOf("流量", "疼痛", "情绪", "睡眠", "白带", "爱爱")
     }
     val coveredLabels = remember(slices) {
         slices.map { it.label }.toSet()

@@ -39,7 +39,7 @@ fun FilterScreen(
                     Checkbox(checked = filterType.contains("同房"), onCheckedChange = { checked ->
                         filterType = if (checked) filterType + "同房" else filterType - "同房"
                     })
-                    Text("同房")
+                    Text("爱爱")
                     Spacer(modifier = Modifier.weight(1f))
                     Checkbox(checked = filterType.contains("导管"), onCheckedChange = { checked ->
                         filterType = if (checked) filterType + "导管" else filterType - "导管"

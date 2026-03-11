@@ -8,7 +8,7 @@ data class IndicatorOption(
 )
 
 fun metricTitle(metricKey: String): String = when (metricKey) {
-    "爱爱" -> "性行为"
+    "爱爱" -> "爱爱"
     "流量" -> "流量"
     "症状" -> "疼痛"
     "心情" -> "情绪"

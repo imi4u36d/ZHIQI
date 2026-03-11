@@ -16,19 +16,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -124,6 +123,12 @@ fun RecordSheet(
     val entryTitle = entryContext?.let { metricTitle(it) }
     val isLoveEntry = entryContext == "爱爱" || type == "同房"
 
+    LaunchedEffect(isLoveEntry, initialRecord?.id, initialTimeMillis) {
+        if (isLoveEntry && initialRecord == null) {
+            selectedTimeMillis = alignTimeToDate(selectedTimeMillis, initialTimeMillis)
+        }
+    }
+
     val title = when {
         initialRecord != null -> "编辑记录"
         !entryContext.isNullOrBlank() -> "今日${entryTitle}记录"
@@ -135,12 +140,13 @@ fun RecordSheet(
             error = "请选择行为类型"
             return
         }
-        if (protections.isEmpty()) {
-            error = "请选择防护措施"
-            return
+        val finalTimeMillis = if (isLoveEntry && initialRecord == null) {
+            alignTimeToDate(selectedTimeMillis, initialTimeMillis)
+        } else {
+            selectedTimeMillis
         }
         val oneYearAgo = System.currentTimeMillis() - 365L * 24 * 60 * 60 * 1000
-        if (selectedTimeMillis !in oneYearAgo..System.currentTimeMillis()) {
+        if (finalTimeMillis !in oneYearAgo..System.currentTimeMillis()) {
             error = "记录时间需在最近一年内"
             return
         }
@@ -151,7 +157,7 @@ fun RecordSheet(
                 type = type!!,
                 protections = protections.joinToString("|"),
                 otherProtection = otherProtection.ifBlank { null },
-                timeMillis = selectedTimeMillis,
+                timeMillis = finalTimeMillis,
                 note = if (isLoveEntry) null else note.ifBlank { null }
             )
         )
@@ -193,7 +199,7 @@ fun RecordSheet(
                 Text("行为", style = MaterialTheme.typography.titleMedium, color = ZhiQiTokens.TextPrimary)
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                    SelectButton("同房", selected = type == "同房", modifier = Modifier.weight(1f)) { type = "同房" }
+                    SelectButton("爱爱", selected = type == "同房", modifier = Modifier.weight(1f)) { type = "同房" }
                     SelectButton("导管", selected = type == "导管", modifier = Modifier.weight(1f)) { type = "导管" }
                 }
             }
@@ -318,50 +324,34 @@ private fun ProtectionOptionGrid(
     selected: Set<String>,
     onToggle: (String) -> Unit
 ) {
-    val firstRow = options.take(PROTECTION_FIRST_ROW_COUNT)
-    val secondRow = options.drop(PROTECTION_FIRST_ROW_COUNT)
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ProtectionOptionRow(
-            items = firstRow,
-            selected = selected,
-            onToggle = onToggle
-        )
-        if (secondRow.isNotEmpty()) {
-            ProtectionOptionRow(
-                items = secondRow,
-                selected = selected,
-                onToggle = onToggle
-            )
+        options.chunked(PROTECTION_COLUMNS).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                rowItems.forEach { item ->
+                    ProtectionOptionChip(
+                        item = item,
+                        selected = selected.contains(item.value),
+                        modifier = Modifier.weight(1f),
+                        onClick = { onToggle(item.value) }
+                    )
+                }
+                repeat(PROTECTION_COLUMNS - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun ProtectionOptionRow(
-    items: List<ProtectionUi>,
-    selected: Set<String>,
-    onToggle: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(14.dp, alignment = Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.Top
-    ) {
-        items.forEach { item ->
-            ProtectionOptionChip(
-                item = item,
-                selected = selected.contains(item.value),
-                onClick = { onToggle(item.value) }
-            )
-        }
-    }
-}
-
-private const val PROTECTION_FIRST_ROW_COUNT = 5
+private const val PROTECTION_COLUMNS = 4
+private val PROTECTION_CARD_HEIGHT = 96.dp
 
 @Composable
 private fun TimeWheelPicker(
@@ -440,6 +430,7 @@ private fun TimeWheelColumn(
             .fillMaxWidth()
             .height(170.dp),
         update = { picker ->
+            stripPickerDecoration(picker)
             val safeRange = if (range.first <= range.last) range else value..value
             if (picker.minValue != safeRange.first || picker.maxValue != safeRange.last) {
                 picker.minValue = safeRange.first
@@ -467,6 +458,17 @@ private fun stripPickerDecoration(picker: NumberPicker) {
         dividerHeightField.isAccessible = true
         dividerHeightField.setInt(picker, 0)
     }
+    runCatching {
+        val dividerDistanceField = NumberPicker::class.java.getDeclaredField("mSelectionDividersDistance")
+        dividerDistanceField.isAccessible = true
+        dividerDistanceField.setInt(picker, 0)
+    }
+    runCatching {
+        val method = NumberPicker::class.java.getDeclaredMethod("setSelectionDividerHeight", Int::class.javaPrimitiveType)
+        method.isAccessible = true
+        method.invoke(picker, 0)
+    }
+    picker.invalidate()
 }
 
 private fun stylePickerText(picker: NumberPicker) {
@@ -565,48 +567,34 @@ private fun ProtectionOptionChip(
     onClick: () -> Unit
 ) {
     val baseTint = ZhiQiTokens.Primary
-    val activeTint = ZhiQiTokens.PrimaryStrong
-    val iconBg = if (selected) ZhiQiTokens.PrimarySoft else ZhiQiTokens.AccentSoft
-    val border = if (selected) activeTint else baseTint.copy(alpha = 0.25f)
-    val iconTint = if (selected) activeTint else baseTint
-    val textColor = if (selected) activeTint else baseTint
+    val cardBg = if (selected) baseTint.copy(alpha = 0.10f) else ZhiQiTokens.Surface
+    val cardBorder = if (selected) baseTint else ZhiQiTokens.Border
+    val iconBg = if (selected) baseTint.copy(alpha = 0.16f) else ZhiQiTokens.SurfaceSoft
+    val iconTint = baseTint
+    val textColor = if (selected) baseTint else ZhiQiTokens.TextSecondary
 
     Column(
         modifier = modifier
-            .widthIn(min = 62.dp)
-            .noRippleClickable(onClick),
+            .height(PROTECTION_CARD_HEIGHT)
+            .background(cardBg, RoundedCornerShape(14.dp))
+            .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+            .noRippleClickable(onClick)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp, alignment = Alignment.CenterVertically)
     ) {
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(44.dp)
                 .background(iconBg, CircleShape)
-                .border(1.dp, border, CircleShape),
+                .border(1.dp, baseTint.copy(alpha = if (selected) 0.5f else 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             ProtectionGlyphIcon(
                 glyph = item.glyph,
                 tint = iconTint,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(22.dp)
             )
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(18.dp)
-                        .background(Color(0xFF23C98A), CircleShape)
-                        .border(1.dp, Color.White, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = "已选中",
-                        tint = Color.White,
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
-            }
         }
         Text(
             text = item.label,
@@ -851,4 +839,16 @@ private fun normalizeProtectionName(name: String): String {
         "其他", "其他措施", "其他措" -> "其他措"
         else -> name.trim()
     }
+}
+
+private fun alignTimeToDate(sourceMillis: Long, targetDateMillis: Long): Long {
+    val source = Calendar.getInstance().apply { timeInMillis = sourceMillis }
+    val target = Calendar.getInstance().apply {
+        timeInMillis = targetDateMillis
+        set(Calendar.HOUR_OF_DAY, source.get(Calendar.HOUR_OF_DAY))
+        set(Calendar.MINUTE, source.get(Calendar.MINUTE))
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return target.timeInMillis
 }

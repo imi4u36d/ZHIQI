@@ -1047,19 +1047,26 @@ private fun buildTodayLogEntries(
         }
         .toList()
 
-    val behaviorEntries = records
+    val todayLoveRecords = records
         .asSequence()
-        .filter { dayKey(it.timeMillis) == todayKey }
-        .map { record ->
-            record.timeMillis to HomeLogEntry(
-                title = "行为",
-                value = buildBehaviorSummary(record),
+        .filter { dayKey(it.timeMillis) == todayKey && it.type == "同房" }
+        .sortedByDescending { it.timeMillis }
+        .toList()
+
+    val behaviorEntries = if (todayLoveRecords.isEmpty()) {
+        emptyList()
+    } else {
+        val latest = todayLoveRecords.first()
+        listOf(
+            latest.timeMillis to HomeLogEntry(
+                title = "爱爱",
+                value = if (todayLoveRecords.size > 1) "${todayLoveRecords.size}次" else buildBehaviorSummary(latest),
                 metricKey = "爱爱",
                 icon = Icons.Filled.Favorite,
                 tint = metricAccent("爱爱")
             )
-        }
-        .toList()
+        )
+    }
 
     return (indicatorEntries + behaviorEntries)
         .sortedByDescending { it.first }
@@ -1087,9 +1094,11 @@ private fun buildBehaviorSummary(record: RecordEntity): String {
     val other = record.otherProtection?.trim().orEmpty().takeIf { it.isNotBlank() }
     val note = record.note?.trim().orEmpty().takeIf { it.isNotBlank() }
     val summaryParts = buildList {
-        add(record.type)
+        add(if (record.type == "同房") "爱爱" else record.type)
         if (protections.isNotEmpty()) {
             add(protections.joinToString(" / "))
+        } else if (other == null) {
+            add("未记录措施")
         }
         if (other != null) {
             add(other)

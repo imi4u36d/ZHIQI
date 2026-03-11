@@ -70,18 +70,22 @@ fun RecordDetailScreen(
             } else {
                 Column(modifier = Modifier.glassCard().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = record!!.type,
+                        text = if (record!!.type == "同房") "爱爱" else record!!.type,
                         style = MaterialTheme.typography.titleLarge
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(record!!.protections.split("|").filter { it.isNotBlank() }) { tag ->
-                            AssistChip(
-                                onClick = { },
-                                label = { Text(tag) },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.background
+                    if (record!!.protections.isBlank()) {
+                        DetailLine("防护措施", "未记录措施")
+                    } else {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(record!!.protections.split("|").filter { it.isNotBlank() }) { tag ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = { Text(tag) },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.background
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                     if (!record!!.otherProtection.isNullOrBlank()) {

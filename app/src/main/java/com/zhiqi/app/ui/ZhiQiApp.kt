@@ -71,8 +71,10 @@ fun ZhiQiApp(lockManager: AppLockManager) {
 
     var showRecordSheet by remember { mutableStateOf(false) }
     var showIndicatorSheet by remember { mutableStateOf(false) }
+    var showLoveRecordPage by remember { mutableStateOf(false) }
     var recordEntryContext by remember { mutableStateOf<String?>(null) }
     var recordEntryDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var editingLoveRecordId by remember { mutableStateOf<Long?>(null) }
     var showDetailSheet by remember { mutableStateOf(false) }
     var detailRecordId by remember { mutableStateOf<Long?>(null) }
     var filterState by remember { mutableStateOf(FilterState()) }
@@ -131,7 +133,7 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                             recordEntryContext = entry
                             recordEntryDateMillis = System.currentTimeMillis()
                             if (entry == "爱爱") {
-                                showRecordSheet = true
+                                showLoveRecordPage = true
                             } else {
                                 showIndicatorSheet = true
                             }
@@ -157,7 +159,7 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                             onAddRecord = { entry ->
                                 recordEntryContext = entry
                                 if (entry == "爱爱") {
-                                    showRecordSheet = true
+                                    showLoveRecordPage = true
                                 } else {
                                     showIndicatorSheet = true
                                 }
@@ -192,30 +194,51 @@ fun ZhiQiApp(lockManager: AppLockManager) {
             }
         }
  
+        if (showLoveRecordPage && isUnlocked && !showSplash) {
+            LoveRecordListPage(
+                targetDateMillis = recordEntryDateMillis,
+                records = allRecords,
+                onBack = {
+                    showLoveRecordPage = false
+                    editingLoveRecordId = null
+                    recordEntryContext = null
+                },
+                onAdd = {
+                    recordEntryContext = "爱爱"
+                    editingLoveRecordId = null
+                    showRecordSheet = true
+                },
+                onEdit = { record ->
+                    recordEntryContext = "爱爱"
+                    editingLoveRecordId = record.id
+                    showRecordSheet = true
+                }
+            )
+        }
+
         if (showRecordSheet && isUnlocked && !showSplash) {
             val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
-                onDismissRequest = { showRecordSheet = false },
+                onDismissRequest = {
+                    showRecordSheet = false
+                    editingLoveRecordId = null
+                },
                 sheetState = sheetState,
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 RecordSheet(
-                    initialRecord = allRecords.firstOrNull {
-                        it.type == "同房" &&
-                            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(it.timeMillis)) ==
-                            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(recordEntryDateMillis))
-                    },
+                    initialRecord = editingLoveRecordId?.let { id -> allRecords.firstOrNull { it.id == id } },
                     initialTimeMillis = recordEntryDateMillis,
                     entryContext = recordEntryContext,
                     onSave = { record ->
                         scope.launch {
                             if (record.id == 0L) repository.add(record) else repository.update(record)
-                            recordEntryContext = null
+                            editingLoveRecordId = null
                             showRecordSheet = false
                         }
                     },
                     onCancel = {
-                        recordEntryContext = null
+                        editingLoveRecordId = null
                         showRecordSheet = false
                     }
                 )
@@ -242,6 +265,13 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                     onSave = { indicator ->
                         scope.launch {
                             indicatorRepository.save(indicator)
+                            recordEntryContext = null
+                            showIndicatorSheet = false
+                        }
+                    },
+                    onClear = { dateKey, metricKey ->
+                        scope.launch {
+                            indicatorRepository.deleteByDateAndMetric(dateKey, metricKey)
                             recordEntryContext = null
                             showIndicatorSheet = false
                         }

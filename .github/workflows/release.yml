@@ -1,6 +1,9 @@
 name: Release APK
 
 on:
+  push:
+    tags:
+      - '*'
   workflow_dispatch:
     inputs:
       version:
@@ -14,6 +17,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
 
     steps:
     - uses: actions/checkout@v4
@@ -28,8 +33,9 @@ jobs:
         cache: gradle
 
     - name: Create and push tag
+      if: ${{ github.event_name == 'workflow_dispatch' }}
       env:
-        TAG_NAME: ${{ github.event.inputs.version }}
+        TAG_NAME: ${{ env.RELEASE_TAG }}
       run: |
         if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
           echo "Tag already exists: $TAG_NAME"
@@ -48,7 +54,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.event.inputs.version }}
-        name: 知期 ${{ github.event.inputs.version }}
+        tag_name: ${{ env.RELEASE_TAG }}
+        name: 知期 ${{ env.RELEASE_TAG }}
         generate_release_notes: true
         files: app/build/outputs/apk/debug/知期.apk

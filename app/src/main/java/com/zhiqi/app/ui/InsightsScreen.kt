@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -139,8 +140,8 @@ fun InsightsScreen(
     val selectedIndicators = remember(allIndicators, selectedDateKey) {
         allIndicators.filter { it.dateKey == selectedDateKey }
     }
-    val selectedLoveRecord = remember(records, selectedDateKey) {
-        records.firstOrNull { it.type == "同房" && dayKey(it.timeMillis) == selectedDateKey }
+    val selectedLoveRecords = remember(records, selectedDateKey) {
+        records.filter { it.type == "同房" && dayKey(it.timeMillis) == selectedDateKey }
     }
     val statusUi = remember(selectedDateMillis, allIndicators, cycleSettingsVersion) {
         buildPeriodStatusUi(
@@ -239,7 +240,7 @@ fun InsightsScreen(
                         onAddRecord(entry)
                     },
                     indicators = selectedIndicators,
-                    loveRecord = selectedLoveRecord
+                    loveRecords = selectedLoveRecords
                 )
             }
             item { Spacer(modifier = Modifier.height(10.dp)) }
@@ -303,6 +304,7 @@ private fun CalendarPanel(
     onBackToToday: () -> Unit,
     onSelectDate: (Long) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(
         initialPage = CALENDAR_PAGER_START_PAGE,
         pageCount = { CALENDAR_PAGER_TOTAL_PAGES }
@@ -327,7 +329,12 @@ private fun CalendarPanel(
         RecordCalendarHeader(
             title = headerState.title,
             selectedDateMillis = selectedDateMillis,
-            onBackToToday = onBackToToday
+            onBackToToday = {
+                onBackToToday()
+                scope.launch {
+                    pagerState.scrollToPage(CALENDAR_PAGER_START_PAGE)
+                }
+            }
         )
 
         HorizontalPager(
@@ -741,7 +748,7 @@ private fun ToggleButton(text: String, active: Boolean, onClick: () -> Unit) {
 private fun RecordEntryList(
     onAddRecord: (String?) -> Unit,
     indicators: List<DailyIndicatorEntity>,
-    loveRecord: RecordEntity?
+    loveRecords: List<RecordEntity>
 ) {
     val items = listOf(
         RecordEntryItem(title = "流量", metricKey = "流量", glyph = RecordEntryGlyph.FLOW, accentColor = ZhiQiTokens.Primary),
@@ -750,7 +757,7 @@ private fun RecordEntryList(
         RecordEntryItem(title = "睡眠", metricKey = "好习惯", glyph = RecordEntryGlyph.SLEEP, accentColor = ZhiQiTokens.PrimaryStrong),
         RecordEntryItem(title = "白带", metricKey = "白带", glyph = RecordEntryGlyph.DISCHARGE, accentColor = ZhiQiTokens.Primary),
         RecordEntryItem(title = "药物", metricKey = "计划", glyph = RecordEntryGlyph.MEDICINE, accentColor = ZhiQiTokens.PrimaryStrong),
-        RecordEntryItem(title = "性行为", metricKey = "爱爱", glyph = RecordEntryGlyph.LOVE, accentColor = ZhiQiTokens.Primary)
+        RecordEntryItem(title = "爱爱", metricKey = "爱爱", glyph = RecordEntryGlyph.LOVE, accentColor = ZhiQiTokens.Primary)
     )
     Column(
         modifier = Modifier
@@ -786,9 +793,14 @@ private fun RecordEntryList(
                     Column {
                         Text(item.title, color = ZhiQiTokens.TextPrimary, style = MaterialTheme.typography.titleMedium)
                         val saved = indicators.firstOrNull { it.metricKey == item.metricKey }
-                        if (item.metricKey == "爱爱" && loveRecord != null) {
+                        if (item.metricKey == "爱爱" && loveRecords.isNotEmpty()) {
+                            val loveLabel = if (loveRecords.size > 1) {
+                                "已记录 · ${loveRecords.size}次"
+                            } else {
+                                "已记录 · ${formatLoveProtectionLabel(loveRecords.first())}"
+                            }
                             Text(
-                                "已记录 · ${loveRecord.protections.replace("|", " / ")}",
+                                loveLabel,
                                 color = ZhiQiTokens.TextMuted,
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
@@ -826,6 +838,16 @@ private fun RecordEntryList(
             }
         }
     }
+}
+
+private fun formatLoveProtectionLabel(record: RecordEntity): String {
+    val protections = record.protections
+        .split("|")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+    if (protections.isNotEmpty()) return protections.joinToString(" / ")
+    val other = record.otherProtection?.trim().orEmpty()
+    return other.ifBlank { "未记录措施" }
 }
 
 private data class RecordEntryItem(

@@ -47,15 +47,16 @@ fun IndicatorSheet(
     targetDateMillis: Long = System.currentTimeMillis(),
     initialIndicator: DailyIndicatorEntity? = null,
     onSave: (DailyIndicatorEntity) -> Unit,
+    onClear: (dateKey: String, metricKey: String) -> Unit,
     onCancel: () -> Unit
 ) {
     val accent = metricAccent(metricKey)
     val options = metricOptions(metricKey)
     var selected by remember(metricKey, initialIndicator?.optionValue) {
-        mutableStateOf(initialIndicator?.optionValue ?: options.firstOrNull()?.value)
+        mutableStateOf(initialIndicator?.optionValue)
     }
     var selectedLabel by remember(metricKey, initialIndicator?.displayLabel) {
-        mutableStateOf(initialIndicator?.displayLabel ?: options.firstOrNull()?.label ?: "")
+        mutableStateOf(initialIndicator?.displayLabel ?: "")
     }
     var customValue by remember(metricKey, initialIndicator?.optionValue) {
         mutableStateOf(
@@ -87,21 +88,26 @@ fun IndicatorSheet(
                 "确定",
                 color = accent,
                 modifier = Modifier.noRippleClickable {
+                    val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(targetDateMillis))
                     val value = when (metricKey) {
                         "体温", "体重", "日记" -> customValue.trim().takeIf { it.isNotBlank() } ?: return@noRippleClickable
-                        else -> selected ?: return@noRippleClickable
+                        else -> selected
+                    }
+                    if (metricKey != "体温" && metricKey != "体重" && metricKey != "日记" && value == null) {
+                        onClear(dateKey, metricKey)
+                        return@noRippleClickable
                     }
                     val label = when (metricKey) {
                         "体温" -> "${value}°C"
                         "体重" -> "${value} 公斤"
-                        "日记" -> value
+                        "日记" -> value ?: ""
                         else -> selectedLabel
                     }
                     onSave(
                         DailyIndicatorEntity(
-                            dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(targetDateMillis)),
+                            dateKey = dateKey,
                             metricKey = metricKey,
-                            optionValue = value,
+                            optionValue = value ?: "",
                             displayLabel = label,
                             updatedAt = System.currentTimeMillis()
                         )
@@ -163,8 +169,13 @@ fun IndicatorSheet(
                                 selected = selected == option.value,
                                 modifier = Modifier.weight(1f),
                                 onClick = {
-                                    selected = option.value
-                                    selectedLabel = option.label
+                                    if (selected == option.value) {
+                                        selected = null
+                                        selectedLabel = ""
+                                    } else {
+                                        selected = option.value
+                                        selectedLabel = option.label
+                                    }
                                 }
                             )
                         }

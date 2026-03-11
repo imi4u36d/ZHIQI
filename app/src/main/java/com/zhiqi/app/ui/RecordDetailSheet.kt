@@ -73,7 +73,11 @@ fun RecordDetailSheet(
         } else {
             val current = record!!
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(current.type, style = MaterialTheme.typography.titleLarge, color = ZhiQiTokens.TextPrimary)
+                Text(
+                    if (current.type == "同房") "爱爱" else current.type,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = ZhiQiTokens.TextPrimary
+                )
                 Text(
                     text = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(current.timeMillis)),
                     style = MaterialTheme.typography.bodyMedium,
@@ -96,6 +100,8 @@ fun RecordDetailSheet(
                             }
                         }
                     }
+                } else {
+                    DetailItem("防护") { Text("未记录措施") }
                 }
 
                 if (!current.otherProtection.isNullOrBlank()) {

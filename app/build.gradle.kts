@@ -44,6 +44,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    applicationVariants.all {
+        outputs.all {
+            @Suppress("DEPRECATION")
+            val apkOutput = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            apkOutput.outputFileName = "知期.apk"
+        }
+    }
 }
 
 dependencies {

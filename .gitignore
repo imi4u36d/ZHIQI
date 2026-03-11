@@ -18,7 +18,6 @@ captures/
 
 # Local machine config
 local.properties
-gradle.properties
 
 # Signing / secrets
 *.jks

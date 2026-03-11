@@ -7,8 +7,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -314,20 +312,46 @@ fun RecordSheet(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProtectionOptionGrid(
     options: List<ProtectionUi>,
     selected: Set<String>,
     onToggle: (String) -> Unit
 ) {
-    FlowRow(
+    val firstRow = options.take(PROTECTION_FIRST_ROW_COUNT)
+    val secondRow = options.drop(PROTECTION_FIRST_ROW_COUNT)
+
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        maxItemsInEachRow = PROTECTION_COLUMNS,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        options.forEach { item ->
+        ProtectionOptionRow(
+            items = firstRow,
+            selected = selected,
+            onToggle = onToggle
+        )
+        if (secondRow.isNotEmpty()) {
+            ProtectionOptionRow(
+                items = secondRow,
+                selected = selected,
+                onToggle = onToggle
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProtectionOptionRow(
+    items: List<ProtectionUi>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp, alignment = Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Top
+    ) {
+        items.forEach { item ->
             ProtectionOptionChip(
                 item = item,
                 selected = selected.contains(item.value),
@@ -337,7 +361,7 @@ private fun ProtectionOptionGrid(
     }
 }
 
-private const val PROTECTION_COLUMNS = 5
+private const val PROTECTION_FIRST_ROW_COUNT = 5
 
 @Composable
 private fun TimeWheelPicker(

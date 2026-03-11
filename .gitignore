@@ -1,5 +1,25 @@
-.codex
-app/build
-build
-gradle.properties
+# Local tools
+.codex/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+
+# Gradle / Android build outputs
+.gradle/
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local machine config
 local.properties
+gradle.properties
+
+# Signing / secrets
+*.jks
+*.keystore

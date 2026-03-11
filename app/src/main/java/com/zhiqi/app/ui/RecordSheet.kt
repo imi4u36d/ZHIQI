@@ -81,10 +81,11 @@ fun RecordSheet(
     var error by remember { mutableStateOf<String?>(null) }
     var selectedTimeMillis by remember { mutableStateOf(initialRecord?.timeMillis ?: initialTimeMillis) }
     val scrollState = rememberScrollState()
+    val entryTitle = entryContext?.let { metricTitle(it) }
 
     val title = when {
         initialRecord != null -> "编辑记录"
-        !entryContext.isNullOrBlank() -> "今日${entryContext}记录"
+        !entryContext.isNullOrBlank() -> "今日${entryTitle}记录"
         else -> "新增记录"
     }
 

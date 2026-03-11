@@ -59,7 +59,7 @@ fun SplashScreen(onFinished: () -> Unit) {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_splash_art),
-                contentDescription = "splash",
+                contentDescription = "启动插画",
                 modifier = Modifier.size(180.dp)
             )
             Spacer(modifier = Modifier.height(20.dp))

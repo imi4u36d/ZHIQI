@@ -60,7 +60,7 @@ fun RecordDetailScreen(
                 Text("记录详情", style = MaterialTheme.typography.titleMedium)
                 Icon(
                     imageVector = Icons.Filled.Menu,
-                    contentDescription = "menu",
+                    contentDescription = "菜单",
                     tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.noRippleClickable { onOpenDrawer() }
                 )

@@ -1,11 +1,16 @@
 package com.zhiqi.app.ui
 
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PathMeasure
+import android.graphics.RectF
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.InvertColors
@@ -31,7 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -40,10 +49,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zhiqi.app.data.DailyIndicatorEntity
@@ -62,6 +74,9 @@ private const val PERIOD_STATUS_KEY = "月经状态"
 private const val PERIOD_STARTED = "start"
 private const val PERIOD_ENDED = "end"
 private const val MAX_PERIOD_DAYS = 10
+private const val RING_START_ANGLE = 145f
+private const val RING_GAP_ANGLE = 0f
+private const val TODAY_ANCHOR_ANGLE = 270f
 
 private enum class HomePeriodAction {
     START,
@@ -80,6 +95,12 @@ private data class HomeRingSegment(
     val color: Color
 )
 
+private data class HomeRingArc(
+    val segment: HomeRingSegment,
+    val startAngle: Float,
+    val sweepAngle: Float
+)
+
 private data class HomeCycleOverview(
     val configured: Boolean,
     val cycleLength: Int,
@@ -96,7 +117,7 @@ private data class HomeCycleOverview(
 private data class HomeLogEntry(
     val title: String,
     val value: String,
-    val metricKey: String,
+    val metricKey: String?,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val tint: Color
 )
@@ -137,8 +158,8 @@ fun HomeScreen(
     val weekDays = remember(cycleSettingsVersion, allIndicators, cycleOverview.expectedStartMillis) {
         buildHomeWeekDays(cycleManager, allIndicators, cycleOverview)
     }
-    val todayLogs = remember(todayIndicators) {
-        buildTodayLogEntries(todayIndicators)
+    val todayLogs = remember(todayIndicators, visibleRecords) {
+        buildTodayLogEntries(todayIndicators, visibleRecords)
     }
     val todayText = remember {
         SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date())
@@ -194,7 +215,7 @@ fun HomeScreen(
             item {
                 HomeTodayLogsCard(
                     entries = todayLogs,
-                    onOpen = onOpenInsights,
+                    onStartRecord = onOpenInsights,
                     onAddRecord = onAddRecord
                 )
             }
@@ -271,172 +292,159 @@ private fun HomeCycleRingCard(
             .padding(top = 8.dp, bottom = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(352.dp)
-                .padding(2.dp),
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val ringStroke = 30.dp.toPx()
-                val ringGap = 2.2f
-                val diameter = size.minDimension - ringStroke - 8.dp.toPx()
-                val topLeft = Offset(
-                    x = (size.width - diameter) / 2f,
-                    y = (size.height - diameter) / 2f
-                )
-                val arcSize = Size(diameter, diameter)
+            val ringSize = maxWidth.coerceAtMost(352.dp).coerceAtLeast(286.dp)
+            val ringStrokeDp = (ringSize.value * 0.085f).dp.coerceIn(24.dp, 30.dp)
+            val centerSize = (ringSize.value * 0.67f).dp
+            val todayTopPadding = (ringSize.value * 0.028f).dp
+            val todayBadgeSize = (ringSize.value * 0.08f).dp.coerceIn(24.dp, 30.dp)
+            val todayIconSize = (todayBadgeSize.value * 0.57f).dp
+            val dayCountFontSize = if (ringSize < 320.dp) 58.sp else 64.sp
+            val dayCountLineHeight = if (ringSize < 320.dp) 58.sp else 64.sp
 
-                drawCircle(
-                    color = Color(0x22CCBDD3),
-                    radius = diameter / 2f + ringStroke * 0.64f,
-                    center = Offset(size.width / 2f, size.height / 2f)
-                )
-
-                var startAngle = 145f
-                val total = overview.cycleLength.coerceAtLeast(1)
-                val availableSweep = 360f - ringGap * overview.ringSegments.size
-                overview.ringSegments.forEach { segment ->
-                    val sweep = availableSweep * (segment.days.toFloat() / total.toFloat())
-                    drawArc(
-                        color = segment.color,
-                        startAngle = startAngle,
-                        sweepAngle = sweep,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = ringStroke, cap = StrokeCap.Round)
-                    )
-                    startAngle += sweep + ringGap
-                }
-            }
-
-            Column(
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                    .size(ringSize)
+                    .padding(2.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(Color.White, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.InvertColors,
-                        contentDescription = "今天",
-                        tint = Color(0xFFE57EA8),
-                        modifier = Modifier.size(16.dp)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val ringStroke = ringStrokeDp.toPx()
+                    val diameter = size.minDimension - ringStroke - 8.dp.toPx()
+                    val topLeft = Offset(
+                        x = (size.width - diameter) / 2f,
+                        y = (size.height - diameter) / 2f
                     )
-                }
-                Text(
-                    text = "今天",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF6D6180)
-                )
-            }
+                    val arcSize = Size(diameter, diameter)
 
-            Column(
-                modifier = Modifier
-                    .size(236.dp)
-                    .shadow(
-                        elevation = 20.dp,
-                        shape = CircleShape,
-                        ambientColor = Color(0x33B8A2C2),
-                        spotColor = Color(0x33B8A2C2)
-                    )
-                    .background(Color(0xFFFDFBFE), CircleShape)
-                    .border(1.dp, Color(0x26DCCEE0), CircleShape)
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "下次月经",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color(0xFF64577A),
-                    fontWeight = FontWeight.SemiBold
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.78f)
-                        .padding(vertical = 8.dp)
-                        .height(1.dp)
-                        .background(Color(0x22A99CB8))
-                )
-
-                if (overview.configured) {
-                    val delayDays = abs(overview.daysToNext)
-                    Row(
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = if (overview.daysToNext >= 0) "还有" else "已推迟",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF6A5F7E)
-                        )
-                        Text(
-                            text = delayDays.toString(),
-                            fontSize = 64.sp,
-                            lineHeight = 64.sp,
-                            color = Color(0xFF5E4C7B),
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "天",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color(0xFF6A5F7E),
-                            modifier = Modifier.padding(bottom = 6.dp)
+                    val ringArcs = buildHomeRingArcs(overview)
+                    ringArcs.forEach { arc ->
+                        drawArc(
+                            color = arc.segment.color,
+                            startAngle = arc.startAngle,
+                            sweepAngle = arc.sweepAngle,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = ringStroke, cap = StrokeCap.Round)
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.84f)
-                            .padding(vertical = 8.dp)
-                            .height(1.dp)
-                            .background(Color(0x1AA99CB8))
-                    )
-
-                    Text(
-                        text = "预计：${formatMonthDay(overview.expectedStartMillis)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color(0xFF7A6E8E)
-                    )
-                } else {
-                    Text(
-                        text = "请先完成周期设置",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color(0xFF6D6380)
-                    )
-                    Text(
-                        text = "设置后可自动生成提醒",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF9288A3)
+                    drawPhaseTextOnOuterRing(
+                        arcs = ringArcs,
+                        diameter = diameter,
+                        ringStroke = ringStroke
                     )
                 }
-            }
 
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 18.dp)
-                    .background(Color(0x10FFFFFF), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                overview.ringSegments.take(3).forEach { segment ->
+                Column(
+                    modifier = Modifier
+                        .size(centerSize)
+                        .shadow(
+                            elevation = 20.dp,
+                            shape = CircleShape,
+                            ambientColor = Color(0x33B8A2C2),
+                            spotColor = Color(0x33B8A2C2)
+                        )
+                        .background(Color(0xFFFDFBFE), CircleShape)
+                        .border(1.dp, Color(0x26DCCEE0), CircleShape)
+                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     Text(
-                        text = segment.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFFF7F3FB),
+                        text = "下次月经",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color(0xFF64577A),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Box(
                         modifier = Modifier
-                            .background(segment.color.copy(alpha = 0.72f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .fillMaxWidth(0.78f)
+                            .padding(vertical = 8.dp)
+                            .height(1.dp)
+                            .background(Color(0x22A99CB8))
+                    )
+
+                    if (overview.configured) {
+                        val delayDays = abs(overview.daysToNext)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (overview.daysToNext >= 0) "还有" else "已推迟",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color(0xFF6A5F7E)
+                            )
+                            Text(
+                                text = delayDays.toString(),
+                                fontSize = dayCountFontSize,
+                                lineHeight = dayCountLineHeight,
+                                color = Color(0xFF5E4C7B),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "天",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color(0xFF6A5F7E)
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.84f)
+                                .padding(vertical = 8.dp)
+                                .height(1.dp)
+                                .background(Color(0x1AA99CB8))
+                        )
+
+                        Text(
+                            text = "预计：${formatMonthDay(overview.expectedStartMillis)}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFF7A6E8E)
+                        )
+                    } else {
+                        Text(
+                            text = "请先完成周期设置",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF6D6380)
+                        )
+                        Text(
+                            text = "设置后可自动生成提醒",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF9288A3)
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = todayTopPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(todayBadgeSize)
+                            .background(Color.White, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.InvertColors,
+                            contentDescription = "今天",
+                            tint = Color(0xFFE57EA8),
+                            modifier = Modifier.size(todayIconSize)
+                        )
+                    }
+                    Text(
+                        text = "今天",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF6D6180)
                     )
                 }
             }
@@ -450,6 +458,155 @@ private fun HomeCycleRingCard(
             )
         }
     }
+}
+
+private fun phaseExplainText(phaseLabel: String): String {
+    return when (phaseLabel) {
+        "经期" -> "经期护理"
+        "卵泡期" -> "卵泡恢复"
+        "易孕窗" -> "易孕关注"
+        "黄体期" -> "黄体调养"
+        else -> phaseLabel
+    }
+}
+
+private fun buildHomeRingArcs(overview: HomeCycleOverview): List<HomeRingArc> {
+    val total = overview.cycleLength.coerceAtLeast(1)
+    val availableSweep = 360f - RING_GAP_ANGLE * overview.ringSegments.size
+    val startAngle = if (overview.configured && overview.cycleDay > 0) {
+        TODAY_ANCHOR_ANGLE - currentCycleDayOffsetAngle(overview, availableSweep)
+    } else {
+        RING_START_ANGLE
+    }
+
+    var cursor = startAngle
+    return overview.ringSegments.map { segment ->
+        val segmentDays = segment.days.coerceAtLeast(1)
+        val sweep = availableSweep * (segmentDays.toFloat() / total.toFloat())
+        val arc = HomeRingArc(
+            segment = segment,
+            startAngle = cursor,
+            sweepAngle = sweep
+        )
+        cursor += sweep + RING_GAP_ANGLE
+        arc
+    }
+}
+
+private fun currentCycleDayOffsetAngle(
+    overview: HomeCycleOverview,
+    availableSweep: Float
+): Float {
+    val total = overview.cycleLength.coerceAtLeast(1)
+    val dayIndex = (overview.cycleDay - 1).coerceIn(0, total - 1)
+    var dayCursor = 0
+    var angleCursor = 0f
+
+    overview.ringSegments.forEach { segment ->
+        val segmentDays = segment.days.coerceAtLeast(1)
+        val sweep = availableSweep * (segmentDays.toFloat() / total.toFloat())
+        if (dayIndex < dayCursor + segmentDays) {
+            val dayInSegment = dayIndex - dayCursor
+            val daySweep = sweep / segmentDays.toFloat()
+            return angleCursor + (dayInSegment + 0.5f) * daySweep
+        }
+        dayCursor += segmentDays
+        angleCursor += sweep + RING_GAP_ANGLE
+    }
+    return angleCursor
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPhaseTextOnOuterRing(
+    arcs: List<HomeRingArc>,
+    diameter: Float,
+    ringStroke: Float
+) {
+    val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 10.dp.toPx()
+        isFakeBoldText = true
+        typeface = android.graphics.Typeface.create(
+            android.graphics.Typeface.DEFAULT,
+            android.graphics.Typeface.BOLD
+        )
+    }
+
+    val textDiameter = diameter + ringStroke * 0.22f
+    val centerX = size.width / 2f
+    val centerY = size.height / 2f
+    val labelOval = RectF(
+        centerX - textDiameter / 2f,
+        centerY - textDiameter / 2f,
+        centerX + textDiameter / 2f,
+        centerY + textDiameter / 2f
+    )
+
+    drawIntoCanvas { canvas ->
+        val nativeCanvas = canvas.nativeCanvas
+        arcs.forEach { arc ->
+            val text = phaseExplainText(arc.segment.label)
+            if (text.isBlank()) return@forEach
+
+            val textPadding = 5f
+            val drawableSweep = (arc.sweepAngle - textPadding * 2f).coerceAtLeast(0f)
+            if (drawableSweep < 10f) return@forEach
+
+            val midAngle = normalizeRingAngle(arc.startAngle + arc.sweepAngle / 2f)
+            val shouldReverse = shouldReverseTextPath(midAngle)
+            val path = Path().apply {
+                if (shouldReverse) {
+                    addArc(
+                        labelOval,
+                        arc.startAngle + arc.sweepAngle - textPadding,
+                        -drawableSweep
+                    )
+                } else {
+                    addArc(
+                        labelOval,
+                        arc.startAngle + textPadding,
+                        drawableSweep
+                    )
+                }
+            }
+
+            val pathLength = PathMeasure(path, false).length
+            if (pathLength <= 1f) return@forEach
+
+            val textPaint = Paint(basePaint)
+            val maxTextWidth = pathLength * 0.86f
+            val baseTextWidth = textPaint.measureText(text)
+            if (baseTextWidth > maxTextWidth) {
+                val scale = (maxTextWidth / baseTextWidth).coerceIn(0.76f, 1f)
+                textPaint.textSize = textPaint.textSize * scale
+            }
+            val textWidth = textPaint.measureText(text)
+            if (textWidth > pathLength * 0.98f) return@forEach
+
+            val hOffset = ((pathLength - textWidth) / 2f).coerceAtLeast(0f)
+            val metrics = textPaint.fontMetrics
+            val textHeight = metrics.descent - metrics.ascent
+            val inwardOffset = (ringStroke * 0.28f - textHeight * 0.18f).coerceAtLeast(1.dp.toPx())
+            val vOffset = if (shouldReverse) -inwardOffset else inwardOffset
+            nativeCanvas.drawTextOnPath(text, path, hOffset, vOffset, textPaint)
+        }
+    }
+}
+
+private fun shouldReverseTextPath(midAngle: Float): Boolean {
+    val tangent = normalizeTo180(midAngle + 90f)
+    return tangent > 90f || tangent < -90f
+}
+
+private fun normalizeTo180(angle: Float): Float {
+    var normalized = (angle + 180f) % 360f
+    if (normalized < 0f) normalized += 360f
+    return normalized - 180f
+}
+
+private fun normalizeRingAngle(angle: Float): Float {
+    var normalized = angle % 360f
+    if (normalized < 0f) normalized += 360f
+    return normalized
 }
 
 @Composable
@@ -501,9 +658,11 @@ private fun HomeInfoTipCard(
 @Composable
 private fun HomeTodayLogsCard(
     entries: List<HomeLogEntry>,
-    onOpen: () -> Unit,
+    onStartRecord: () -> Unit,
     onAddRecord: (String?) -> Unit
 ) {
+    var expanded by remember(entries) { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -522,35 +681,87 @@ private fun HomeTodayLogsCard(
                 color = Color(0xFF5F4F76)
             )
             Icon(
-                imageVector = Icons.Filled.ChevronRight,
-                contentDescription = "查看",
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "收起" else "展开",
                 tint = Color(0xFFA596B7),
                 modifier = Modifier
                     .size(24.dp)
-                    .clickable(onClick = onOpen)
+                    .clickable(enabled = entries.isNotEmpty()) { expanded = !expanded }
             )
         }
 
-        Row(
+        if (entries.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "今天还没有记录，点击下方开始记录。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF726884)
+                )
+                Text(
+                    text = "立即记录",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF8A6BC5), RoundedCornerShape(12.dp))
+                        .padding(vertical = 10.dp)
+                        .noRippleClickable(onStartRecord)
+                )
+            }
+            return
+        }
+
+        val shownEntries = if (expanded) entries else entries.take(2)
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFF7F2FA), RoundedCornerShape(16.dp))
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            entries.forEachIndexed { index, entry ->
-                HomeLogChip(
-                    entry = entry,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onAddRecord(entry.metricKey) }
+            HomeLogGrid(
+                entries = shownEntries,
+                onAddRecord = onAddRecord
+            )
+            if (!expanded && entries.size > shownEntries.size) {
+                Text(
+                    text = "已记录 ${entries.size} 项，点击右上角展开查看全部",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF887C9B)
                 )
-                if (index != entries.lastIndex) {
-                    Box(
-                        modifier = Modifier
-                            .height(36.dp)
-                            .width(1.dp)
-                            .background(Color(0x1FA79CB6))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeLogGrid(
+    entries: List<HomeLogEntry>,
+    onAddRecord: (String?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        entries.chunked(2).forEach { rowEntries ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (rowEntries.size == 1) {
+                    Box(modifier = Modifier.weight(0.5f))
+                }
+                rowEntries.forEach { entry ->
+                    HomeLogChip(
+                        entry = entry,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onAddRecord(entry.metricKey) }
                     )
+                }
+                if (rowEntries.size < 2) {
+                    Box(modifier = Modifier.weight(0.5f))
                 }
             }
         }
@@ -563,24 +774,42 @@ private fun HomeLogChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Row(
+    val clickableModifier = if (entry.metricKey != null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
+
+    Column(
         modifier = modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+            .background(Color(0xFFF9F5FC), RoundedCornerShape(12.dp))
+            .border(1.dp, Color(0x1FA79CB6), RoundedCornerShape(12.dp))
+            .then(clickableModifier)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = entry.icon,
-            contentDescription = entry.title,
-            tint = entry.tint,
-            modifier = Modifier.size(24.dp)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(
+                imageVector = entry.icon,
+                contentDescription = entry.title,
+                tint = entry.tint,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = Color(0xFF5F5575),
+                textAlign = TextAlign.Center
+            )
+        }
         Text(
-            text = " ${entry.title}：${entry.value}",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFF5F5575),
-            maxLines = 1
+            text = entry.value,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF7F7495),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -678,7 +907,7 @@ private fun buildHomeCycleOverview(
         HomeRingSegment(label = "经期", days = 5, color = Color(0xFFF178A9)),
         HomeRingSegment(label = "卵泡期", days = 9, color = Color(0xFFF594BD)),
         HomeRingSegment(label = "易孕窗", days = 6, color = Color(0xFF9BCE63)),
-        HomeRingSegment(label = "排卵期", days = 8, color = Color(0xFFA88AE6))
+        HomeRingSegment(label = "黄体期", days = 8, color = Color(0xFFA88AE6))
     )
 
     if (!manager.isConfigured() || manager.lastPeriodStartMillis() <= 0L) {
@@ -740,7 +969,7 @@ private fun buildHomeCycleOverview(
         HomeRingSegment(label = "经期", days = periodLength, color = Color(0xFFF178A9)),
         HomeRingSegment(label = "卵泡期", days = follicularDays, color = Color(0xFFF594BD)),
         HomeRingSegment(label = "易孕窗", days = fertileDays, color = Color(0xFF9BCE63)),
-        HomeRingSegment(label = "排卵期", days = lutealDays, color = Color(0xFFA88AE6))
+        HomeRingSegment(label = "黄体期", days = lutealDays, color = Color(0xFFA88AE6))
     )
 
     return HomeCycleOverview(
@@ -806,36 +1035,77 @@ private fun buildHomeWeekDays(
     }
 }
 
-private fun buildTodayLogEntries(indicators: List<DailyIndicatorEntity>): List<HomeLogEntry> {
-    fun valueFor(metricKey: String, fallback: String): String {
-        val raw = indicators.firstOrNull { it.metricKey == metricKey }?.displayLabel?.trim().orEmpty()
-        if (raw.isBlank()) return fallback
-        return if (raw.length > 7) "${raw.take(7)}…" else raw
-    }
+private fun buildTodayLogEntries(
+    indicators: List<DailyIndicatorEntity>,
+    records: List<RecordEntity>
+): List<HomeLogEntry> {
+    val todayKey = dayKey(System.currentTimeMillis())
+    val indicatorEntries = indicators
+        .asSequence()
+        .filter { it.displayLabel.isNotBlank() }
+        .map { indicator ->
+            indicator.updatedAt to HomeLogEntry(
+                title = metricTitle(indicator.metricKey),
+                value = indicator.displayLabel.trim(),
+                metricKey = indicator.metricKey.takeIf(::supportsQuickRecordMetric),
+                icon = metricIcon(indicator.metricKey),
+                tint = metricAccent(indicator.metricKey)
+            )
+        }
+        .toList()
 
-    return listOf(
-        HomeLogEntry(
-            title = "流量",
-            value = valueFor("流量", "未记录"),
-            metricKey = "流量",
-            icon = Icons.Filled.InvertColors,
-            tint = Color(0xFFAB87DE)
-        ),
-        HomeLogEntry(
-            title = "心情",
-            value = valueFor("心情", "未记录"),
-            metricKey = "心情",
-            icon = Icons.Filled.SentimentSatisfied,
-            tint = Color(0xFFE6B556)
-        ),
-        HomeLogEntry(
-            title = "睡眠",
-            value = valueFor("好习惯", "未记录"),
-            metricKey = "好习惯",
-            icon = Icons.Filled.Hotel,
-            tint = Color(0xFF8A7DD2)
-        )
-    )
+    val behaviorEntries = records
+        .asSequence()
+        .filter { dayKey(it.timeMillis) == todayKey }
+        .map { record ->
+            record.timeMillis to HomeLogEntry(
+                title = "行为",
+                value = buildBehaviorSummary(record),
+                metricKey = "爱爱",
+                icon = Icons.Filled.Favorite,
+                tint = metricAccent("爱爱")
+            )
+        }
+        .toList()
+
+    return (indicatorEntries + behaviorEntries)
+        .sortedByDescending { it.first }
+        .map { it.second }
+}
+
+private fun supportsQuickRecordMetric(metricKey: String): Boolean {
+    return metricKey in setOf("流量", "症状", "心情", "白带", "体温", "体重", "日记", "好习惯", "便便", "计划", "爱爱")
+}
+
+private fun metricIcon(metricKey: String): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (metricKey) {
+        "流量", PERIOD_STATUS_KEY -> Icons.Filled.InvertColors
+        "心情" -> Icons.Filled.SentimentSatisfied
+        "好习惯" -> Icons.Filled.Hotel
+        "爱爱" -> Icons.Filled.Favorite
+        else -> Icons.Filled.Notifications
+    }
+}
+
+private fun buildBehaviorSummary(record: RecordEntity): String {
+    val protections = record.protections.split("|")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+    val other = record.otherProtection?.trim().orEmpty().takeIf { it.isNotBlank() }
+    val note = record.note?.trim().orEmpty().takeIf { it.isNotBlank() }
+    val summaryParts = buildList {
+        add(record.type)
+        if (protections.isNotEmpty()) {
+            add(protections.joinToString(" / "))
+        }
+        if (other != null) {
+            add(other)
+        }
+        if (note != null) {
+            add(note)
+        }
+    }
+    return summaryParts.joinToString(" · ").ifBlank { "已记录" }
 }
 private data class CycleTip(
     val title: String,

@@ -92,7 +92,7 @@ fun UnlockScreen(
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_splash_art),
-                contentDescription = "lock",
+                contentDescription = "解锁插画",
                 modifier = Modifier.height(104.dp)
             )
             Spacer(modifier = Modifier.height(14.dp))

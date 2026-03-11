@@ -26,6 +26,8 @@ class ReminderPrefsManager(context: Context) {
 
     fun reminderTime(): String = prefs.getString(KEY_TIME, DEFAULT_TIME) ?: DEFAULT_TIME
 
+    fun hideSensitiveWords(): Boolean = prefs.getBoolean(KEY_HIDE_SENSITIVE, true)
+
     fun save(enabled: Boolean, time: String) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, enabled)
@@ -41,6 +43,10 @@ class ReminderPrefsManager(context: Context) {
         save(isEnabled(), time)
     }
 
+    fun saveSensitiveHidden(hidden: Boolean) {
+        prefs.edit().putBoolean(KEY_HIDE_SENSITIVE, hidden).apply()
+    }
+
     private fun normalizeTime(time: String): String {
         val parts = time.split(":")
         val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 21
@@ -52,6 +58,7 @@ class ReminderPrefsManager(context: Context) {
         private const val PREFS_NAME = "zhiqi_reminder"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_TIME = "time"
+        private const val KEY_HIDE_SENSITIVE = "hide_sensitive_words"
         private const val DEFAULT_TIME = "21:00"
     }
 }
@@ -136,8 +143,14 @@ object ReminderScheduler {
 
             val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher_default)
-                .setContentTitle("知期 · 安全提醒")
-                .setContentText("记得记录今天的状态并做好防护。")
+                .setContentTitle(if (prefs.hideSensitiveWords()) "知期 · 今日提醒" else "知期 · 安全提醒")
+                .setContentText(
+                    if (prefs.hideSensitiveWords()) {
+                        "记得完成今天的健康记录。"
+                    } else {
+                        "记得记录今天的状态并做好防护。"
+                    }
+                )
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -96,10 +96,12 @@ fun MeScreen(
     val passwordEnabled by pinManager.passwordEnabled.collectAsState()
 
     var remind by remember { mutableStateOf(reminderPrefs.isEnabled()) }
+    var hideSensitiveWords by remember { mutableStateOf(reminderPrefs.hideSensitiveWords()) }
     var clearStep by remember { mutableStateOf(0) }
     var message by remember { mutableStateOf("") }
     var isWorking by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var showAlgorithmDialog by remember { mutableStateOf(false) }
     val reminderTime = remember { mutableStateOf(reminderPrefs.reminderTime()) }
 
     var showUnlockSheet by remember { mutableStateOf(false) }
@@ -157,7 +159,7 @@ fun MeScreen(
             }
 
             item {
-                SectionCard(title = "隐私与周期") {
+                SectionCard(title = "隐私与提醒") {
                     MenuRow(
                         icon = Icons.Filled.CalendarMonth,
                         title = "生理期设置",
@@ -229,11 +231,35 @@ fun MeScreen(
                             }, hour, minute, true).show()
                         }
                     )
+                    ReminderPrivacyRow(
+                        hidden = hideSensitiveWords,
+                        onToggle = { hidden ->
+                            hideSensitiveWords = hidden
+                            reminderPrefs.saveSensitiveHidden(hidden)
+                            message = if (hidden) {
+                                "通知将隐藏敏感词"
+                            } else {
+                                "通知将显示完整提醒内容"
+                            }
+                        }
+                    )
+                    MenuRow(
+                        icon = Icons.Filled.Storage,
+                        title = "算法说明",
+                        subtitle = "查看预测依据、误差来源与提升准确度方式",
+                        onClick = { showAlgorithmDialog = true }
+                    )
                 }
             }
 
             item {
                 SectionCard(title = "数据管理") {
+                    MenuRow(
+                        icon = Icons.Filled.Person,
+                        title = "账号与设备同步",
+                        subtitle = "当前为本地模式，后续支持跨设备同步",
+                        enabled = false
+                    )
                     MenuRow(
                         icon = Icons.Filled.Download,
                         title = "数据导出",
@@ -256,7 +282,8 @@ fun MeScreen(
                         recordCount = records.size,
                         cycleConfigured = cycleManager.isConfigured(),
                         pinConfigured = pinConfigured,
-                        passwordEnabled = passwordEnabled
+                        passwordEnabled = passwordEnabled,
+                        hideSensitiveWords = hideSensitiveWords
                     )
                 }
             }
@@ -287,6 +314,23 @@ fun MeScreen(
 
             item { Spacer(modifier = Modifier.height(12.dp)) }
         }
+    }
+
+    if (showAlgorithmDialog) {
+        AlertDialog(
+            onDismissRequest = { showAlgorithmDialog = false },
+            title = { Text("预测依据说明") },
+            text = {
+                Text(
+                    "系统会结合最近经期开始日、周期长度、经期天数和历史记录进行区间预测。\\n\\n" +
+                        "当连续漏记或近期波动较大时，预测范围会扩大并提示补充记录。\\n\\n" +
+                        "建议连续记录 3 个周期，以获得更稳定的趋势结论。"
+                )
+            },
+            confirmButton = {
+                Button(onClick = { showAlgorithmDialog = false }) { Text("我知道了") }
+            }
+        )
     }
 
     if (pendingImportUri != null) {
@@ -589,6 +633,40 @@ private fun ReminderRow(
 }
 
 @Composable
+private fun ReminderPrivacyRow(
+    hidden: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(ZhiQiTokens.PrimarySoft, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.Notifications, contentDescription = "通知隐私", tint = ZhiQiTokens.Primary)
+            }
+            Column {
+                Text("通知内容隐私", color = ZhiQiTokens.TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    if (hidden) "隐藏“经期/排卵”等敏感词" else "显示完整提醒内容",
+                    color = ZhiQiTokens.TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+        Switch(checked = hidden, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
 private fun PasswordToggleRow(
     enabled: Boolean,
     pinConfigured: Boolean,
@@ -632,7 +710,8 @@ private fun DataStatusBlock(
     recordCount: Int,
     cycleConfigured: Boolean,
     pinConfigured: Boolean,
-    passwordEnabled: Boolean
+    passwordEnabled: Boolean,
+    hideSensitiveWords: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -647,6 +726,7 @@ private fun DataStatusBlock(
         Text("周期配置：${if (cycleConfigured) "已保存" else "未保存"}", color = ZhiQiTokens.TextSecondary, style = MaterialTheme.typography.bodySmall)
         Text("密码功能：${if (passwordEnabled) "开启" else "关闭"}", color = ZhiQiTokens.TextSecondary, style = MaterialTheme.typography.bodySmall)
         Text("解锁密码：${if (pinConfigured) "已设置" else "未设置"}", color = ZhiQiTokens.TextSecondary, style = MaterialTheme.typography.bodySmall)
+        Text("通知隐私：${if (hideSensitiveWords) "隐藏敏感词" else "显示完整内容"}", color = ZhiQiTokens.TextSecondary, style = MaterialTheme.typography.bodySmall)
     }
 }
 

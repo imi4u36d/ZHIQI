@@ -2,6 +2,7 @@ package com.zhiqi.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,7 +22,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.InvertColors
+import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pause
@@ -41,6 +44,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,12 +52,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import com.zhiqi.app.data.DailyIndicatorEntity
 import com.zhiqi.app.data.DailyIndicatorRepository
 import com.zhiqi.app.data.RecordEntity
@@ -63,6 +76,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 private const val PERIOD_STATUS_KEY = "月经状态"
 private const val PERIOD_STARTED = "start"
@@ -92,14 +106,27 @@ fun InsightsScreen(
     var periodActionFeedback by remember { mutableStateOf<String?>(null) }
     var pendingOverwrite by remember { mutableStateOf<PeriodOverwriteRequest?>(null) }
 
-    val monthState = remember(monthOffset, cycleSettingsVersion, records, allIndicators, selectedDateMillis) {
-        buildCycleMonthState(
-            cycleManager = cycleManager,
-            monthOffset = monthOffset,
-            records = records,
-            indicators = allIndicators,
-            selectedDateMillis = selectedDateMillis
-        )
+    val monthStateCache = remember(cycleSettingsVersion, records, allIndicators, selectedDateMillis) {
+        mutableMapOf<Int, CycleMonthState>()
+    }
+    val monthStateProvider: (Int) -> CycleMonthState = remember(
+        monthStateCache,
+        cycleManager,
+        records,
+        allIndicators,
+        selectedDateMillis
+    ) {
+        { offset ->
+            monthStateCache.getOrPut(offset) {
+                buildCycleMonthState(
+                    cycleManager = cycleManager,
+                    monthOffset = offset,
+                    records = records,
+                    indicators = allIndicators,
+                    selectedDateMillis = selectedDateMillis
+                )
+            }
+        }
     }
     val cycleInsight = remember(cycleSettingsVersion, allIndicators, records) {
         buildCycleInsight(cycleManager, allIndicators)
@@ -144,10 +171,14 @@ fun InsightsScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 CalendarPanel(
-                    title = monthState.title,
-                    monthState = monthState,
-                    onPrev = { monthOffset -= 1 },
-                    onNext = { monthOffset += 1 },
+                    monthOffset = monthOffset,
+                    monthStateProvider = monthStateProvider,
+                    selectedDateMillis = selectedDateMillis,
+                    onBackToToday = {
+                        selectedDateMillis = startOfDay(System.currentTimeMillis())
+                        periodActionFeedback = null
+                    },
+                    onShiftMonths = { delta -> monthOffset += delta },
                     onSelectDate = {
                         selectedDateMillis = it
                         periodActionFeedback = null
@@ -264,22 +295,170 @@ fun InsightsScreen(
 
 @Composable
 private fun CalendarPanel(
-    title: String,
-    monthState: CycleMonthState,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
+    monthOffset: Int,
+    monthStateProvider: (Int) -> CycleMonthState,
+    selectedDateMillis: Long,
+    onBackToToday: () -> Unit,
+    onShiftMonths: (Int) -> Unit,
     onSelectDate: (Long) -> Unit
 ) {
+    val fallbackSwitchOffsetPx = with(LocalDensity.current) { 96.dp.toPx() }
+    val tinyDragIgnorePx = with(LocalDensity.current) { 6.dp.toPx() }
+    var dragTarget by remember { mutableFloatStateOf(0f) }
+    var panelWidthPx by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    var previewShift by remember { mutableIntStateOf(0) }
+    var pendingCommitShift by remember { mutableIntStateOf(0) }
+    var stagedCommitShift by remember { mutableIntStateOf(0) }
+    var settleTarget by remember { mutableFloatStateOf(0f) }
+    var snapAfterCommit by remember { mutableStateOf(false) }
+    val animatedDragOffset by animateFloatAsState(
+        targetValue = if (isDragging) dragTarget else settleTarget,
+        animationSpec = when {
+            isDragging -> snap()
+            snapAfterCommit -> snap()
+            else -> tween(durationMillis = 170, easing = LinearEasing)
+        },
+        finishedListener = {
+            if (isDragging) return@animateFloatAsState
+            if (pendingCommitShift != 0) {
+                stagedCommitShift = pendingCommitShift
+                pendingCommitShift = 0
+                previewShift = stagedCommitShift
+                snapAfterCommit = true
+                settleTarget = 0f
+                dragTarget = 0f
+            } else if (snapAfterCommit) {
+                if (stagedCommitShift != 0) {
+                    onShiftMonths(stagedCommitShift)
+                    stagedCommitShift = 0
+                    previewShift = 0
+                }
+                snapAfterCommit = false
+            }
+        },
+        label = "calendar-drag-offset"
+    )
+    val activeWidth = panelWidthPx.takeIf { it > 0f } ?: fallbackSwitchOffsetPx
+    val switchThresholdPx = (activeWidth * 0.18f).coerceAtLeast(tinyDragIgnorePx)
+    val headerState = remember(monthOffset, monthStateProvider) {
+        monthStateProvider(monthOffset)
+    }
+    val displayMonthOffset = monthOffset + previewShift
+    val monthState = remember(displayMonthOffset, monthStateProvider) {
+        monthStateProvider(displayMonthOffset)
+    }
+    val prevMonthState = remember(displayMonthOffset, monthStateProvider) {
+        monthStateProvider(displayMonthOffset - 1)
+    }
+    val nextMonthState = remember(displayMonthOffset, monthStateProvider) {
+        monthStateProvider(displayMonthOffset + 1)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .glassCard()
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .pointerInput(activeWidth, onShiftMonths) {
+                detectHorizontalDragGestures(
+                    onDragStart = {
+                        if (pendingCommitShift != 0) return@detectHorizontalDragGestures
+                        snapAfterCommit = false
+                        stagedCommitShift = 0
+                        isDragging = true
+                        settleTarget = dragTarget
+                    },
+                    onHorizontalDrag = { _, dragAmount ->
+                        if (pendingCommitShift != 0) return@detectHorizontalDragGestures
+                        dragTarget += dragAmount
+                        if (activeWidth > 1f) {
+                            while (dragTarget >= activeWidth) {
+                                previewShift -= 1
+                                dragTarget -= activeWidth
+                            }
+                            while (dragTarget <= -activeWidth) {
+                                previewShift += 1
+                                dragTarget += activeWidth
+                            }
+                        }
+                    },
+                    onDragEnd = {
+                        val finalOffset = dragTarget
+                        isDragging = false
+                        if (abs(finalOffset) <= tinyDragIgnorePx) {
+                            pendingCommitShift = previewShift
+                            settleTarget = 0f
+                        } else if (finalOffset > switchThresholdPx) {
+                            pendingCommitShift = previewShift - 1
+                            settleTarget = activeWidth
+                        } else if (finalOffset < -switchThresholdPx) {
+                            pendingCommitShift = previewShift + 1
+                            settleTarget = -activeWidth
+                        } else {
+                            pendingCommitShift = previewShift
+                            settleTarget = 0f
+                        }
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        pendingCommitShift = previewShift
+                        settleTarget = 0f
+                    }
+                )
+            }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        RecordCalendarHeader(title = title, onPrev = onPrev, onNext = onNext)
+        RecordCalendarHeader(
+            title = headerState.title,
+            selectedDateMillis = selectedDateMillis,
+            onBackToToday = onBackToToday
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+                .onSizeChanged { panelWidthPx = it.width.toFloat() }
+        ) {
+            if (animatedDragOffset > 0.5f) {
+                CalendarMonthBody(
+                    state = prevMonthState,
+                    onSelectDate = onSelectDate,
+                    modifier = Modifier.graphicsLayer {
+                        translationX = animatedDragOffset - activeWidth
+                    }
+                )
+            } else if (animatedDragOffset < -0.5f) {
+                CalendarMonthBody(
+                    state = nextMonthState,
+                    onSelectDate = onSelectDate,
+                    modifier = Modifier.graphicsLayer {
+                        translationX = animatedDragOffset + activeWidth
+                    }
+                )
+            }
+
+            CalendarMonthBody(
+                state = monthState,
+                onSelectDate = onSelectDate,
+                modifier = Modifier.graphicsLayer {
+                    translationX = animatedDragOffset
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CalendarMonthBody(
+    state: CycleMonthState,
+    onSelectDate: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         CalendarWeekHeader()
-        CalendarGrid(monthState = monthState, onSelectDate = onSelectDate)
+        CalendarGrid(monthState = state, onSelectDate = onSelectDate)
         CalendarLegend()
     }
 }
@@ -287,43 +466,38 @@ private fun CalendarPanel(
 @Composable
 private fun RecordCalendarHeader(
     title: String,
-    onPrev: () -> Unit,
-    onNext: () -> Unit
+    selectedDateMillis: Long,
+    onBackToToday: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        MonthSwitchButton(
-            text = "上个月",
-            onClick = onPrev
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color(0xFF5F4F76),
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "回到今天",
+                style = MaterialTheme.typography.labelMedium,
+                color = ZhiQiTokens.Primary,
+                modifier = Modifier.noRippleClickable(onBackToToday)
+            )
+        }
         Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.secondary,
-            fontWeight = FontWeight.SemiBold
+            text = "当前日期：${formatMonthDay(selectedDateMillis)} · 左右滑动切换月份",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFF9A8FB0)
         )
-        MonthSwitchButton(
-            text = "下个月",
-            onClick = onNext
-        )
-    }
-}
-
-@Composable
-private fun MonthSwitchButton(text: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .background(ZhiQiTokens.AccentSoft, RoundedCornerShape(12.dp))
-            .border(1.dp, ZhiQiTokens.Border, RoundedCornerShape(12.dp))
-            .noRippleClickable(onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp)
-    ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = ZhiQiTokens.Primary)
     }
 }
 
@@ -339,8 +513,8 @@ private fun CalendarWeekHeader() {
                 text = label,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
-                color = ZhiQiTokens.TextMuted,
-                style = MaterialTheme.typography.labelMedium
+                color = Color(0xFF7B708F),
+                style = MaterialTheme.typography.titleMedium
             )
         }
     }
@@ -671,16 +845,13 @@ private fun RecordEntryList(
     loveRecord: RecordEntity?
 ) {
     val items = listOf(
-        RecordEntryItem("爱爱", Icons.Filled.Favorite),
-        RecordEntryItem("症状", Icons.Filled.HealthAndSafety),
-        RecordEntryItem("心情", Icons.Filled.Mood),
-        RecordEntryItem("白带", Icons.Filled.InvertColors),
-        RecordEntryItem("体温", Icons.Filled.Thermostat),
-        RecordEntryItem("体重", Icons.Filled.Palette),
-        RecordEntryItem("日记", Icons.Filled.Schedule),
-        RecordEntryItem("好习惯", Icons.Filled.ThumbUp),
-        RecordEntryItem("便便", Icons.Filled.Palette),
-        RecordEntryItem("计划", Icons.Filled.Today)
+        RecordEntryItem(title = "流量", metricKey = "流量", icon = Icons.Filled.InvertColors),
+        RecordEntryItem(title = "疼痛", metricKey = "症状", icon = Icons.Filled.HealthAndSafety),
+        RecordEntryItem(title = "情绪", metricKey = "心情", icon = Icons.Filled.Mood),
+        RecordEntryItem(title = "睡眠", metricKey = "好习惯", icon = Icons.Filled.Hotel),
+        RecordEntryItem(title = "白带", metricKey = "白带", icon = Icons.Filled.Thermostat),
+        RecordEntryItem(title = "药物", metricKey = "计划", icon = Icons.Filled.LocalHospital),
+        RecordEntryItem(title = "性行为", metricKey = "爱爱", icon = Icons.Filled.Favorite)
     )
     Column(
         modifier = Modifier
@@ -706,8 +877,8 @@ private fun RecordEntryList(
                     }
                     Column {
                         Text(item.title, color = ZhiQiTokens.TextPrimary, style = MaterialTheme.typography.titleMedium)
-                        val saved = indicators.firstOrNull { it.metricKey == item.title }
-                        if (item.title == "爱爱" && loveRecord != null) {
+                        val saved = indicators.firstOrNull { it.metricKey == item.metricKey }
+                        if (item.metricKey == "爱爱" && loveRecord != null) {
                             Text(
                                 "已记录 · ${loveRecord.protections.replace("|", " / ")}",
                                 color = ZhiQiTokens.TextMuted,
@@ -722,7 +893,7 @@ private fun RecordEntryList(
                     modifier = Modifier
                         .size(34.dp)
                         .border(1.dp, ZhiQiTokens.BorderStrong, CircleShape)
-                        .noRippleClickable { onAddRecord(item.title) },
+                        .noRippleClickable { onAddRecord(item.metricKey) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = item.title, tint = ZhiQiTokens.Primary)
@@ -741,7 +912,11 @@ private fun RecordEntryList(
     }
 }
 
-private data class RecordEntryItem(val title: String, val icon: ImageVector)
+private data class RecordEntryItem(
+    val title: String,
+    val metricKey: String,
+    val icon: ImageVector
+)
 private data class LegendItem(val label: String, val color: Color)
 private data class CycleInsight(
     val summaryTitle: String,
@@ -1117,14 +1292,21 @@ private fun buildPredictedPeriodRanges(
     val expectedNextStart = anchorStartMillis + cycleLength * dayMillis
     val overdueDays = ((todayStart - expectedNextStart) / dayMillis).toInt()
 
-    // Practical rule: when overdue is obvious, keep only one pending predicted window.
+    // Practical rule: when overdue is obvious, keep the original expected window
+    // and one pending window from today, so historical month review and current month both remain visible.
     if (overdueDays > OVERDUE_FREEZE_DAYS) {
-        return listOf(
-            ActualPeriodRange(
-                startMillis = expectedNextStart,
-                endMillis = expectedNextStart + (safePeriodLength - 1L) * dayMillis
-            )
+        val historicalRange = ActualPeriodRange(
+            startMillis = expectedNextStart,
+            endMillis = expectedNextStart + (safePeriodLength - 1L) * dayMillis
         )
+        val pendingStart = todayStart
+        val pendingRange = ActualPeriodRange(
+            startMillis = pendingStart,
+            endMillis = pendingStart + (safePeriodLength - 1L) * dayMillis
+        )
+        return listOf(historicalRange, pendingRange)
+            .distinctBy { it.startMillis }
+            .sortedBy { it.startMillis }
     }
 
     return (1..3).map { index ->
@@ -1179,8 +1361,7 @@ private fun phaseForDate(
     }
     if (!hasCycle || lastStartMillis <= 0L) return PhaseState.NONE
 
-    val todayStart = startOfDay(System.currentTimeMillis())
-    if (normalized >= todayStart && predictedRanges.any { normalized in it.startMillis..it.endMillis }) {
+    if (predictedRanges.any { normalized in it.startMillis..it.endMillis }) {
         return PhaseState.PREDICTED_PERIOD
     }
 

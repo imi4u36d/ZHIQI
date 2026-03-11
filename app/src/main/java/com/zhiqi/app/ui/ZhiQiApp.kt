@@ -2,6 +2,7 @@ package com.zhiqi.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -56,6 +57,8 @@ fun ZhiQiApp(lockManager: AppLockManager) {
     val scope = rememberCoroutineScope()
 
     val pinManager = remember { PinManager(context) }
+    val cycleManager = remember { CycleSettingsManager(context) }
+    val onboardingPrefs = remember { context.getSharedPreferences("zhiqi_onboarding", android.content.Context.MODE_PRIVATE) }
     val database = remember { DatabaseProvider.get(context) }
     val repository = remember {
         RecordRepository(database.recordDao())
@@ -77,6 +80,11 @@ fun ZhiQiApp(lockManager: AppLockManager) {
     var showCycleSavedDialog by remember { mutableStateOf(false) }
     var cycleSettingsVersion by remember { mutableStateOf(0) }
     var showSplash by remember { mutableStateOf(true) }
+    var showFirstGuide by remember {
+        mutableStateOf(
+            !onboardingPrefs.getBoolean("completed", false) && !cycleManager.isConfigured()
+        )
+    }
     var currentRoute by remember { mutableStateOf("home") }
     val isUnlocked by lockManager.isUnlocked.collectAsState()
     val pinConfigured by pinManager.pinConfigured.collectAsState()
@@ -130,11 +138,18 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                         },
                         onOpenCycleSettings = { showCycleSheet = true },
                         onOpenInsights = {
-                            currentRoute = "insights"
+                            currentRoute = "analysis"
                         }
                     )
                         }
                         "insights" -> {
+                        AnalysisScreen(
+                            records = allRecords,
+                            indicators = allIndicators,
+                            onOpenRecordPage = { currentRoute = "analysis" }
+                        )
+                        }
+                        "analysis" -> {
                         InsightsScreen(
                             repository = repository,
                             indicatorRepository = indicatorRepository,
@@ -161,12 +176,6 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                             onCycleChanged = {
                                 cycleSettingsVersion += 1
                             }
-                        )
-                        }
-                        "analysis" -> {
-                        AnalysisScreen(
-                            records = allRecords,
-                            indicators = allIndicators
                         )
                         }
                         else -> {
@@ -257,8 +266,29 @@ fun ZhiQiApp(lockManager: AppLockManager) {
                         cycleSettingsVersion += 1
                         showCycleSavedDialog = true
                         showCycleSheet = false
+                        onboardingPrefs.edit().putBoolean("completed", true).apply()
                     },
                     onCancel = { showCycleSheet = false }
+                )
+            }
+        }
+
+        if (showFirstGuide && isUnlocked && !showSplash) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { showFirstGuide = false },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                FirstUseGuideSheet(
+                    onLater = {
+                        onboardingPrefs.edit().putBoolean("completed", true).apply()
+                        showFirstGuide = false
+                    },
+                    onStartSetup = {
+                        showFirstGuide = false
+                        showCycleSheet = true
+                    }
                 )
             }
         }
@@ -306,8 +336,8 @@ private fun AppBottomBar(
 ) {
     val items = listOf(
         Triple("home", "首页", Icons.Filled.Home),
-        Triple("insights", "记录", Icons.Filled.CalendarMonth),
-        Triple("analysis", "分析", Icons.Filled.AutoGraph),
+        Triple("insights", "洞察", Icons.Filled.AutoGraph),
+        Triple("analysis", "记录", Icons.Filled.CalendarMonth),
         Triple("me", "我的", Icons.Filled.Person)
     )
     Box(
@@ -382,3 +412,54 @@ data class FilterState(
     val types: Set<String> = emptySet(),
     val protections: Set<String> = emptySet()
 )
+
+@Composable
+private fun FirstUseGuideSheet(
+    onLater: () -> Unit,
+    onStartSetup: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("欢迎使用知期", style = MaterialTheme.typography.titleLarge, color = ZhiQiTokens.TextPrimary)
+        Text(
+            "首次仅需填写 3 项基础信息：最近一次经期开始日、平均周期长度、经期天数。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = ZhiQiTokens.TextSecondary
+        )
+        Text(
+            "完成后即可获得首页预测、日历阶段着色和提醒建议。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = ZhiQiTokens.TextSecondary
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "稍后设置",
+                color = ZhiQiTokens.TextSecondary,
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, ZhiQiTokens.Border, RoundedCornerShape(14.dp))
+                    .padding(vertical = 12.dp)
+                    .noRippleClickable(onLater),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Text(
+                text = "立即设置",
+                color = Color.White,
+                modifier = Modifier
+                    .weight(1f)
+                    .background(ZhiQiTokens.PrimaryStrong, RoundedCornerShape(14.dp))
+                    .padding(vertical = 12.dp)
+                    .noRippleClickable(onStartSetup),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+    }
+}

@@ -8,17 +8,17 @@ data class IndicatorOption(
 )
 
 fun metricTitle(metricKey: String): String = when (metricKey) {
-    "爱爱" -> "爱爱"
+    "爱爱" -> "性行为"
     "流量" -> "流量"
-    "症状" -> "症状"
-    "心情" -> "心情"
+    "症状" -> "疼痛"
+    "心情" -> "情绪"
     "白带" -> "白带"
     "体温" -> "体温"
     "体重" -> "体重"
     "日记" -> "日记"
-    "好习惯" -> "好习惯"
+    "好习惯" -> "睡眠"
     "便便" -> "便便"
-    "计划" -> "计划"
+    "计划" -> "药物"
     else -> metricKey
 }
 
@@ -46,12 +46,12 @@ fun metricOptions(metricKey: String): List<IndicatorOption> = when (metricKey) {
         IndicatorOption("very_heavy", "大量")
     )
     "症状" -> listOf(
-        IndicatorOption("none", "无"),
-        IndicatorOption("bloating", "腹胀"),
-        IndicatorOption("fatigue", "乏力"),
-        IndicatorOption("backache", "腰酸"),
-        IndicatorOption("breast", "胸胀"),
-        IndicatorOption("acne", "痘痘")
+        IndicatorOption("none", "无疼痛"),
+        IndicatorOption("light_pain", "轻微疼痛"),
+        IndicatorOption("moderate_pain", "中度疼痛"),
+        IndicatorOption("severe_pain", "重度疼痛"),
+        IndicatorOption("cramp", "绞痛"),
+        IndicatorOption("dull_ache", "持续隐痛")
     )
     "心情" -> listOf(
         IndicatorOption("happy", "开心"),
@@ -86,11 +86,12 @@ fun metricOptions(metricKey: String): List<IndicatorOption> = when (metricKey) {
         IndicatorOption("other", "其他")
     )
     "好习惯" -> listOf(
-        IndicatorOption("sleep", "早睡"),
-        IndicatorOption("water", "喝水"),
-        IndicatorOption("sport", "运动"),
-        IndicatorOption("stretch", "拉伸"),
-        IndicatorOption("vitamin", "维生素")
+        IndicatorOption("sleep_lt5", "少于5小时"),
+        IndicatorOption("sleep_5_6", "5-6小时"),
+        IndicatorOption("sleep_6_8", "6-8小时"),
+        IndicatorOption("sleep_gt8", "8小时以上"),
+        IndicatorOption("sleep_poor", "入睡困难"),
+        IndicatorOption("sleep_broken", "易醒多梦")
     )
     "便便" -> listOf(
         IndicatorOption("normal", "正常"),
@@ -100,11 +101,12 @@ fun metricOptions(metricKey: String): List<IndicatorOption> = when (metricKey) {
         IndicatorOption("many", "多次")
     )
     "计划" -> listOf(
-        IndicatorOption("rest", "休息"),
-        IndicatorOption("exercise", "运动"),
-        IndicatorOption("date", "约会"),
-        IndicatorOption("check", "检查"),
-        IndicatorOption("medicine", "买药")
+        IndicatorOption("none", "未用药"),
+        IndicatorOption("painkiller", "止痛药"),
+        IndicatorOption("antispasmodic", "解痉药"),
+        IndicatorOption("hormone", "激素类"),
+        IndicatorOption("supplement", "补充剂"),
+        IndicatorOption("other_medicine", "其他药物")
     )
     else -> emptyList()
 }

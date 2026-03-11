@@ -80,7 +80,7 @@ fun IndicatorSheet(
                     }
                     val label = when (metricKey) {
                         "体温" -> "${value}°C"
-                        "体重" -> "${value} kg"
+                        "体重" -> "${value} 公斤"
                         "日记" -> value
                         else -> selectedLabel
                     }
